@@ -6,14 +6,11 @@ from pycluster.messenger.message_object import MessageObject, ObjectCallbackDefi
 T = TypeVar("T", bound=MessageObject)
 
 
-class FizzleSentinel:
-    """
+FizzleReplace = object()
+"""
     A special value that can be returned from a replacement method to indicate that
     the method did not have its condition fulfilled. The system will choose another suitable replacement.
-    """
-
-
-FizzleReplace = FizzleSentinel()
+"""
 
 
 class ObjectRegistry:
@@ -50,7 +47,7 @@ class ObjectRegistry:
         return object_cls(parent, **kwargs)
 
     def create_and_insert(
-        self, object_type: int, parent: MessageObject, object_id: int | str, cast_to: Type[T] = MessageObject, **kwargs
+        self, object_type: int, parent: MessageObject, object_id: str, cast_to: Type[T] = MessageObject, **kwargs
     ) -> T:
         obj = self.create_object(object_type, parent, **kwargs)
         parent.add_child(object_id, obj)

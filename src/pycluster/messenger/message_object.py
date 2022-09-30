@@ -1,10 +1,13 @@
 import logging
 import queue
-from typing import Optional, Sequence, TypeVar
+from typing import Optional, Sequence, TypeVar, TYPE_CHECKING
 
 from pycluster.util.action_lock import ActionLock
 
-WrappedChildren = dict[int | str, "WrappedObject"]
+if TYPE_CHECKING:
+    from pycluster.messenger.object_registry import ObjectRegistry
+
+WrappedChildren = dict[str, "WrappedObject"]
 WrappedObject = tuple[int, any, WrappedChildren]
 CallbackDefinition = tuple[callable, int, Sequence, dict, bool, float]
 ObjectCallbackDefinition = tuple["MessageObject", callable, int, Sequence, dict, bool, float]
@@ -17,7 +20,7 @@ class MessageObject:
     logger = logging.getLogger("pycluster.messenger.MessageObject")
 
     object_type: int = -1
-    children: dict[int | str, "MessageObject"]
+    children: dict[str, "MessageObject"]
     parent: "MessageObject"
     _ls_storage = None
     _mt_storage = None
@@ -28,7 +31,7 @@ class MessageObject:
         self.children = {}
         self.parent = parent
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: str) -> "MessageObject":
         return self.children[item]
 
     # Managing parent interaction
@@ -76,7 +79,7 @@ class MessageObject:
         """
 
     @property
-    def registry(self):
+    def registry(self) -> "ObjectRegistry":
         """
         Gets the registry of this object.
         :return: The registry.
@@ -87,7 +90,7 @@ class MessageObject:
         return self.parent_cluster.registry
 
     # Managing hierarchy
-    def add_child(self, child_id: int | str, child: "MessageObject"):
+    def add_child(self, child_id: str, child: "MessageObject") -> "MessageObject":
         """
         Adds a child to this object. The child is assumed to have the same parent cluster as this object.
         :param child_id: The id of the child.
@@ -96,6 +99,18 @@ class MessageObject:
 
         assert child.parent_cluster is self.parent_cluster
         self.children[child_id] = child
+        return child
+
+    def remove_child(self, child_id: str) -> None:
+        """
+        Remove a child from this object and cleanup any listeners hanging on it.
+        :param child_id: The id of the child.
+        :return: nothing
+        """
+
+        child = self.children.pop(child_id, None)
+        if child:
+            child.cleanup()
 
     def wrap(self) -> WrappedObject:
         """
@@ -112,20 +127,23 @@ class MessageObject:
         :param wrapped: The wrapped object to unwrap.
         :return: nothing
         """
-        q: queue.Queue[tuple["MessageObject", int | str, int, any, WrappedChildren]] = queue.Queue()
+        q: queue.Queue[tuple["MessageObject", str, int, any, WrappedChildren]] = queue.Queue()
         self.datagram = wrapped[1]
         for child_id, (child_type, data, children) in wrapped[2].items():
             q.put((self, child_id, child_type, data, children))
 
         while not q.empty():
             parent, child_id, child_type, data, children = q.get()
-            child = self.parent_cluster.registry.create_object(child_type, parent)
-            parent.add_child(child_id, child)
+            if child_id in parent.children:
+                child = parent.children[child_id]
+            else:
+                child = self.parent_cluster.registry.create_object(child_type, parent)
+                parent.add_child(child_id, child)
             child.datagram = data
             for child_id, (child_type, data, children) in children.items():
                 q.put((child, child_id, child_type, data, children))
 
-    def copy_inplace(self, new_id: int | str = None):
+    def copy_inplace(self, new_id: str = None) -> "MessageObject":
         """
         Copy this object and all children and attach it to the same cluster.
         Does not copy **kwargs, unless those are saved in a datagram.
@@ -138,7 +156,7 @@ class MessageObject:
             self.parent.add_child(new_id, new)
         return new
 
-    def copy(self):
+    def copy(self) -> "MessageObject":
         """
         Copy this object and all children. Attach them to a different cluster.
         Does not copy **kwargs, unless those are saved in a datagram.
@@ -173,7 +191,7 @@ class MessageObject:
         pass_object: bool = False,
         priority: float = 0,
         **kwargs
-    ):
+    ) -> None:
         """
         Listen to an event from the parent cluster.
         :param event: The event to listen to.
@@ -205,7 +223,7 @@ class MessageObject:
             storage[obj] = callback, limit - 1, cargs, ckwargs, pass_obj, priority
         return value, limit - 1
 
-    def emit(self, event: int | str, *args, **kwargs):
+    def emit(self, event: int | str, *args, **kwargs) -> None:
         """
         Emit an event to the parent cluster.
         :param event: The event to emit.
@@ -224,7 +242,7 @@ class MessageObject:
                 if new_limit == 0:
                     obj.ignore(event)
 
-    def ignore(self, event: int | str):
+    def ignore(self, event: int | str) -> None:
         """
         Ignore an event from the parent cluster.
         :param event: The event to ignore.
