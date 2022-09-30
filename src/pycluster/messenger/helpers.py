@@ -1,7 +1,7 @@
 from pycluster.messenger.message_object import MessageObject
 
 
-def listen(event: int | str, *args, limit=-1, **kwargs):
+def listen(event: int | str, *args, limit: int = -1, priority: float = 0, **kwargs):
     """
     Decorator for event listeners. The decorated method will be called when the event is emitted on the cluster.
     Caveats due to implementation details (same for math):
@@ -10,6 +10,7 @@ def listen(event: int | str, *args, limit=-1, **kwargs):
     :param event: the event name to listen for
     :param args: additional arguments to pass to the method
     :param limit: the number of times to listen for the event. -1 for unlimited.
+    :param priority: the priority of the listener. Higher priority listeners are called first.
     :param kwargs: additional keyword arguments to pass to the method
     :return: the decorator for the method
     """
@@ -23,7 +24,7 @@ def listen(event: int | str, *args, limit=-1, **kwargs):
 
             def new_init(obj: MessageObject, *iargs, **ikwargs):
                 old_init(obj, *iargs, **ikwargs)
-                obj.listen_to(event, self.callback, limit=limit, pass_object=True, *args, **kwargs)
+                obj.listen_to(event, self.callback, limit=limit, pass_object=True, priority=priority, *args, **kwargs)
 
             owner.__init__ = new_init
 
@@ -32,13 +33,14 @@ def listen(event: int | str, *args, limit=-1, **kwargs):
     return Listener
 
 
-def math(event: int | str, *args, limit=-1, **kwargs):
+def math(target: int | str, *args, limit: int = -1, priority: float = 0, **kwargs):
     """
     Decorator for math handlers. The decorated method will be called when the math recalculation is requested.
     NOTE: see caveats for listen()
-    :param event: the recalculation target name to listen for
+    :param target: the recalculation target name to listen for
     :param args: additional arguments to pass to the method
     :param limit: the number of times to listen for the event. -1 for unlimited.
+    :param priority: the priority of the listener. Higher priority calculators are called later.
     :param kwargs: additional keyword arguments to pass to the method
     :return: the decorator for the method
     """
@@ -52,7 +54,9 @@ def math(event: int | str, *args, limit=-1, **kwargs):
 
             def new_init(obj: MessageObject, *iargs, **ikwargs):
                 old_init(obj, *iargs, **ikwargs)
-                obj.register_math(event, self.callback, limit=limit, pass_object=True, *args, **kwargs)
+                obj.register_math(
+                    target, self.callback, limit=limit, pass_object=True, priority=priority, *args, **kwargs
+                )
 
             owner.__init__ = new_init
 
@@ -61,13 +65,14 @@ def math(event: int | str, *args, limit=-1, **kwargs):
     return Calculator
 
 
-def replace(funcname: int | str, *args, limit=-1, **kwargs):
+def replace(funcname: int | str, *args, limit: int = -1, priority: float = 0, **kwargs):
     """
     Decorator for method replacers.
     NOTE: see caveats for listen()
     :param funcname: the callback name to replace
     :param args: additional arguments to pass to the method
     :param limit: the number of times to listen for the event. -1 for unlimited.
+    :param priority: the priority of the listener. Higher priority listeners are called first.
     :param kwargs: additional keyword arguments to pass to the method
     :return: the decorator for the method
     """
@@ -82,7 +87,9 @@ def replace(funcname: int | str, *args, limit=-1, **kwargs):
             def new_init(obj: MessageObject, *iargs, **ikwargs):
                 old_init(obj, *iargs, **ikwargs)
                 registry = obj.registry
-                registry.register_replace(funcname, obj, self.callback, pass_object=True, limit=limit, *args, **kwargs)
+                registry.register_replace(
+                    funcname, obj, self.callback, pass_object=True, limit=limit, priority=priority, *args, **kwargs
+                )
 
             owner.__init__ = new_init
 

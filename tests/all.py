@@ -5,6 +5,7 @@ from events import test_events
 from inheritance import test_inheritance
 from copy import test_copies
 from fizzle import test_fizzle
+from priority import test_priority
 
 
 if __name__ == "__main__":
@@ -28,5 +29,8 @@ if __name__ == "__main__":
 
     print("Testing fizzled replacement")
     test_fizzle()
+
+    print("Testing priority modifications")
+    test_priority()
 
     print("All tests passed!")

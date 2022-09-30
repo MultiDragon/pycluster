@@ -3,7 +3,7 @@ from pycluster.messenger.helpers import replace
 from pycluster.messenger.message_object import MessageObject
 from pycluster.messenger.object_registry import FizzleReplace, ObjectRegistry
 
-registry = ObjectRegistry("replace", MessageCluster)
+registry = ObjectRegistry("fizzle", MessageCluster)
 
 
 @registry.register(1)

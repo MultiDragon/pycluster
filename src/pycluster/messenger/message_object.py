@@ -6,7 +6,8 @@ from pycluster.util.action_lock import ActionLock
 
 WrappedChildren = dict[int | str, "WrappedObject"]
 WrappedObject = tuple[int, any, WrappedChildren]
-CallbackDefinition = tuple[callable, int, Sequence, dict, bool]
+CallbackDefinition = tuple[callable, int, Sequence, dict, bool, float]
+ObjectCallbackDefinition = tuple["MessageObject", callable, int, Sequence, dict, bool, float]
 CallbackDict = dict["MessageObject", CallbackDefinition]
 
 V = TypeVar("V")
@@ -164,7 +165,14 @@ class MessageObject:
         return parent.listener_storage
 
     def listen_to(
-        self, event: int | str, callback: callable, *args, limit: int = -1, pass_object: bool = False, **kwargs
+        self,
+        event: int | str,
+        callback: callable,
+        *args,
+        limit: int = -1,
+        pass_object: bool = False,
+        priority: float = 0,
+        **kwargs
     ):
         """
         Listen to an event from the parent cluster.
@@ -173,6 +181,7 @@ class MessageObject:
         :param args: The args to pass to the callback.
         :param limit: The number of times to call the callback. -1 for infinite.
         :param pass_object: Whether to pass the object owner to the callback. Has to be True when using the decorator.
+        :param priority: The priority of the callback. Higher priority callbacks are called earlier.
         :param kwargs: The kwargs to pass to the callback.
         :return: nothing
         """
@@ -181,19 +190,19 @@ class MessageObject:
             storage = self.listener_storage
             if event not in storage:
                 storage[event] = {}
-            lock.setitem(storage[event], self, (callback, limit, args, kwargs, pass_object))
+            lock.setitem(storage[event], self, (callback, limit, args, kwargs, pass_object, priority))
 
     @staticmethod
     def run_method(
         storage: Optional[CallbackDict], obj: "MessageObject", quad: CallbackDefinition, *args, **kwargs
     ) -> tuple[any, int]:
-        callback, limit, cargs, ckwargs, pass_obj = quad
+        callback, limit, cargs, ckwargs, pass_obj, priority = quad
         if pass_obj:
             value = callback(obj, *cargs, *args, **ckwargs, **kwargs)
         else:
             value = callback(*cargs, *args, **ckwargs, **kwargs)
         if storage:
-            storage[obj] = callback, limit - 1, cargs, ckwargs, pass_obj
+            storage[obj] = callback, limit - 1, cargs, ckwargs, pass_obj, priority
         return value, limit - 1
 
     def emit(self, event: int | str, *args, **kwargs):
@@ -210,7 +219,7 @@ class MessageObject:
             if event not in storage:
                 return
 
-            for obj, quad in storage[event].items():
+            for obj, quad in sorted(storage[event].items(), key=lambda x: x[1][5], reverse=True):
                 new_limit = self.run_method(storage[event], obj, quad, *args, **kwargs)[1]
                 if new_limit == 0:
                     obj.ignore(event)
@@ -245,7 +254,14 @@ class MessageObject:
         return parent.math_storage
 
     def register_math(
-        self, target: int | str, callback: callable, *args, limit: int = -1, pass_object: bool = False, **kwargs
+        self,
+        target: int | str,
+        callback: callable,
+        *args,
+        limit: int = -1,
+        pass_object: bool = False,
+        priority: float = 0,
+        **kwargs
     ):
         """
         Listen to a math recalculation target from the parent cluster.
@@ -254,6 +270,7 @@ class MessageObject:
         :param args: The args to pass to the callback.
         :param limit: The number of times to call the callback. -1 for infinite.
         :param pass_object: Whether to pass the object owner to the callback. Has to be True when using the decorator.
+        :param priority: The priority of the callback. Higher priority callbacks are called later.
         :param kwargs: The kwargs to pass to the callback.
         :return: nothing
         """
@@ -262,7 +279,7 @@ class MessageObject:
             storage = self.math_storage
             if target not in storage:
                 storage[target] = {}
-            lock.setitem(storage[target], self, (callback, limit, args, kwargs, pass_object))
+            lock.setitem(storage[target], self, (callback, limit, args, kwargs, pass_object, priority))
 
     def calculate(self, target: int | str, init_value: V, **kwargs) -> V:
         """
@@ -279,7 +296,7 @@ class MessageObject:
             if target not in storage:
                 return current_value
 
-            for obj, quad in storage[target].items():
+            for obj, quad in sorted(storage[target].items(), key=lambda x: x[1][5]):
                 current_value, new_limit = self.run_method(
                     storage[target], obj, quad, current_value, init_value=init_value, **kwargs
                 )
