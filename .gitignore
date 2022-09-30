@@ -1,1 +1,4 @@
 .idea
+dist
+src/pycluster.egg-info
+**/__pycache__

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=60", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pycluster"
+version = "0.9"
+authors = [
+    {name = "Wizzerinus", email = "wizzerine@gmail.com"}
+]
+description = "pyCluster provides a simple syntactically sweet clustered math and event manager in Python 3.9"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3.9",
+    "License :: OSI Approved :: BSD 3-Clause License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+homepage = "https://github.com/multidragon/pycluster"
+bugtracker = "https://github.com/multidragon/pycluster/issues"
