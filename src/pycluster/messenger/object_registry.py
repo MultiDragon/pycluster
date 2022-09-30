@@ -4,6 +4,7 @@ from typing import Type, TypeVar
 from pycluster.messenger.message_object import MessageObject, WrappedObject
 
 T = TypeVar("T", bound=MessageObject)
+FizzleReplace = object()
 
 
 class ObjectRegistry:
@@ -59,9 +60,10 @@ class ObjectRegistry:
                 if name in self.replaced_methods:
                     replacements = self.replaced_methods[name]
                     if replacements:
-                        obj, *cb = next(iter(replacements.values()))
-                        value = obj.run_replace(name, cb, *args, **kwargs)
-                        return value
+                        for obj, *cb in replacements.values():
+                            value = obj.run_replace(name, cb, *args, **kwargs)
+                            if value is not FizzleReplace:
+                                return value
 
                 return method(*args, **kwargs)
 

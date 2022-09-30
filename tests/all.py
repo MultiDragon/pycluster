@@ -4,6 +4,7 @@ from wrapping import wrapping_test
 from events import test_events
 from inheritance import test_inheritance
 from copy import test_copies
+from fizzle import test_fizzle
 
 
 if __name__ == "__main__":
@@ -24,5 +25,8 @@ if __name__ == "__main__":
 
     print("Testing object copying")
     test_copies()
+
+    print("Testing fizzled replacement")
+    test_fizzle()
 
     print("All tests passed!")

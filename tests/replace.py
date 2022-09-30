@@ -16,7 +16,8 @@ class ReplaceTarget(MessageObject):
 @registry.register(2)
 class ReplaceProxy(MessageObject):
     @replace("test")
-    def test(self):
+    def test(self, replace_target):
+        assert isinstance(replace_target, ReplaceTarget)
         return 2
 
 

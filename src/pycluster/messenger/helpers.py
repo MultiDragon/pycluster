@@ -82,7 +82,7 @@ def replace(funcname: int | str, *args, limit=-1, **kwargs):
             def new_init(obj: MessageObject, *iargs, **ikwargs):
                 old_init(obj, *iargs, **ikwargs)
                 registry = obj.registry
-                registry.register_replace(funcname, obj, self.callback, limit=limit, *args, **kwargs)
+                registry.register_replace(funcname, obj, self.callback, pass_object=True, limit=limit, *args, **kwargs)
 
             owner.__init__ = new_init
 
