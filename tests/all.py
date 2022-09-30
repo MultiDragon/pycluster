@@ -1,36 +1,25 @@
-from calculations import test_calculation
-from replace import test_replace
-from wrapping import wrapping_test
-from events import test_events
-from inheritance import test_inheritance
-from copy import test_copies
-from fizzle import test_fizzle
-from priority import test_priority
+import glob
+import os
 
 
 if __name__ == "__main__":
-    print("Testing wrapping functions")
-    wrapping_test()
+    failed_tests = []
+    pwd = os.path.dirname(os.path.abspath(__file__))
+    files = glob.glob(f"{pwd}/*.py")
+    for i in files:
+        if i.endswith(os.path.basename(__file__)):
+            continue
 
-    print("Testing events")
-    test_events()
+        test_name = os.path.basename(i).replace(".py", "")
+        print(f"Running test {test_name}")
+        return_code = os.system(f"python3 {i}")
+        if return_code != 0:
+            print(f"Test {test_name} failed!")
+            failed_tests.append(test_name)
 
-    print("Testing math")
-    test_calculation()
-
-    print("Testing inheritance")
-    test_inheritance()
-
-    print("Testing replacements")
-    test_replace()
-
-    print("Testing object copying")
-    test_copies()
-
-    print("Testing fizzled replacement")
-    test_fizzle()
-
-    print("Testing priority modifications")
-    test_priority()
-
-    print("All tests passed!")
+    if failed_tests:
+        print(f"Failed tests: {failed_tests}")
+        exit(1)
+    else:
+        print("All tests passed!")
+        exit(0)

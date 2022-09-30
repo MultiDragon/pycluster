@@ -16,6 +16,13 @@ CallbackDict = dict["MessageObject", CallbackDefinition]
 V = TypeVar("V")
 
 
+FizzleReplace = object()
+"""
+    A special value that can be returned from a replacement method to indicate that
+    the method did not have its condition fulfilled. The system will choose another suitable replacement.
+"""
+
+
 class MessageObject:
     logger = logging.getLogger("pycluster.messenger.MessageObject")
 
@@ -24,6 +31,7 @@ class MessageObject:
     parent: "MessageObject"
     _ls_storage = None
     _mt_storage = None
+    _rm_storage = None
     _act_lock = None
     _registry = None
 
@@ -90,14 +98,16 @@ class MessageObject:
         return self.parent_cluster.registry
 
     # Managing hierarchy
-    def add_child(self, child_id: str, child: "MessageObject") -> "MessageObject":
+    def add_child(self, child_id: str, child: "MessageObject", allow_subtrees: bool = False) -> "MessageObject":
         """
         Adds a child to this object. The child is assumed to have the same parent cluster as this object.
         :param child_id: The id of the child.
         :param child: The child object.
+        :param allow_subtrees: Whether to allow the child to have children from a different cluster.
         """
 
-        assert child.parent_cluster is self.parent_cluster
+        if not allow_subtrees:
+            assert child.parent_cluster is self.parent_cluster
         self.children[child_id] = child
         return child
 
@@ -345,16 +355,9 @@ class MessageObject:
         """
 
         with self.action_lock as lock:
-            storage = self.listener_storage
-            for event in storage:
-                lock.delitem(storage[event], self)
-
-            storage = self.math_storage
-            for target in storage:
-                lock.delitem(storage[target], self)
-
-            for method in self.registry.replaced_methods:
-                lock.delitem(self.registry.replaced_methods[method], self)
+            for storage in [self.listener_storage, self.math_storage, self.repl_storage]:
+                for event in storage:
+                    lock.delitem(storage[event], self)
 
     def cleanup(self):
         """
@@ -368,13 +371,73 @@ class MessageObject:
         self.children = {}
 
     # Replacement methods
-    def run_replace(self, name: int | str, cb: CallbackDefinition, *args, **kwargs):
-        value, limit = self.run_method(None, self, cb, *args, **kwargs)
-        registry = self.registry
-        repl = list(registry.replaced_methods[name][self])
-        repl[2] = limit
-        registry.replaced_methods[name][self] = tuple(repl)
-        if not limit:
-            with self.action_lock as lock:
-                lock.delitem(registry.replaced_methods[name], self)
-        return value
+    @property
+    def repl_storage(self) -> dict[str, CallbackDict]:
+        """
+        Gets the listener storage for the parent cluster.
+        :return: The listener storage.
+        """
+
+        parent = self.parent_cluster
+        if parent is self:
+            if self._rm_storage is None:
+                self._rm_storage = {}
+            return self._rm_storage
+        return parent.repl_storage
+
+    def ignore_replacement(self, target: int | str):
+        """
+        Ignore a replacement target from the parent cluster.
+        :param target: The target to ignore.
+        :return: nothing
+        """
+
+        with self.action_lock as lock:
+            storage = self.repl_storage
+            if target not in storage or self not in storage[target]:
+                return
+
+            lock.delitem(storage[target], self)
+
+    def run_replace(self, name: int | str, *args, **kwargs):
+        methods = self.repl_storage.get(name, {})
+        with self.action_lock:
+            for obj, cb in sorted(methods.items(), key=lambda x: x[1][5], reverse=True):
+                value, limit = self.run_method(None, obj, cb, *args, **kwargs)
+                if value is FizzleReplace:
+                    continue
+
+                methods[obj] = cb[0], limit, cb[2], cb[3], cb[4], cb[5]
+                if limit == 0:
+                    self.ignore_replacement(name)
+                return True, value
+
+        return False, None
+
+    def register_replace(
+        self,
+        funcname: int | str,
+        callback: callable,
+        *args,
+        limit: int = -1,
+        pass_object: bool = False,
+        priority: float = 0,
+        **kwargs
+    ):
+        """
+        Listen to a replacement target from the parent cluster.
+        :param funcname: The target to listen to.
+        :param callback: The callback to call when the event is emitted.
+        :param args: The args to pass to the callback.
+        :param limit: The number of times to call the callback. -1 for infinite.
+        :param pass_object: Whether to pass the object owner to the callback. Has to be True when using the decorator.
+        :param priority: The priority of the callback. Higher priority callbacks are called later.
+        :param kwargs: The kwargs to pass to the callback.
+        :return: nothing
+        """
+
+        with self.action_lock as lock:
+            storage = self.repl_storage
+            if funcname not in storage:
+                storage[funcname] = {}
+            lock.setitem(storage[funcname], self, (callback, limit, args, kwargs, pass_object, priority))

@@ -1,7 +1,7 @@
 from pycluster.messenger.cluster import MessageCluster
 from pycluster.messenger.helpers import replace
-from pycluster.messenger.message_object import MessageObject
-from pycluster.messenger.object_registry import FizzleReplace, ObjectRegistry
+from pycluster.messenger.message_object import FizzleReplace, MessageObject
+from pycluster.messenger.object_registry import ObjectRegistry
 
 registry = ObjectRegistry("fizzle", MessageCluster)
 
@@ -21,8 +21,8 @@ class ReplaceProxy(MessageObject):
         self.new_value = -1
 
     @replace("test")
-    def test(self, replace_target, value):
-        assert isinstance(replace_target, ReplaceTarget)
+    def test(self, value):
+        # assert isinstance(replace_target, ReplaceTarget)
         if value == self.ignored_value:
             return FizzleReplace
         self.new_value = value
@@ -36,7 +36,7 @@ class FinalReplaceProxy(MessageObject):
         self.called = False
 
     @replace("test")
-    def test(self, replace_target, value):
+    def test(self, value):
         assert value == 6
         self.called = True
         return FizzleReplace

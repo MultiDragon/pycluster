@@ -1,7 +1,7 @@
 from pycluster.messenger.cluster import MessageCluster
 from pycluster.messenger.helpers import listen, math, replace
 from pycluster.messenger.message_object import MessageObject
-from pycluster.messenger.object_registry import FizzleReplace, ObjectRegistry
+from pycluster.messenger.object_registry import ObjectRegistry
 
 registry = ObjectRegistry("priority", MessageCluster)
 
@@ -26,7 +26,7 @@ class ObjectA(MessageObject):
         return value + 5
 
     @replace("test_method")
-    def test_method(self, replace_target):
+    def test_method(self):
         raise RuntimeError("This should not be called")
 
 
@@ -41,7 +41,7 @@ class ObjectB(MessageObject):
         return 1000
 
     @replace("test_method", priority=1)
-    def test_method(self, replace_target):
+    def test_method(self):
         return 5
 
 
