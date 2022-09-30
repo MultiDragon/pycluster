@@ -177,51 +177,17 @@ class MessageObject:
         new.unwrap(wrapped)
         return new
 
-    # Managing events
-    @property
-    def listener_storage(self) -> dict[str, CallbackDict]:
-        """
-        Gets the listener storage for the parent cluster.
-        :return: The listener storage.
-        """
-
+    # Top-level registration
+    def __get_storage(self, name) -> dict[str, CallbackDict]:
         parent = self.parent_cluster
         if parent is self:
-            if self._ls_storage is None:
-                self._ls_storage = {}
-            return self._ls_storage
-        return parent.listener_storage
-
-    def listen_to(
-        self,
-        event: int | str,
-        callback: callable,
-        *args,
-        limit: int = -1,
-        pass_object: bool = False,
-        priority: float = 0,
-        **kwargs
-    ) -> None:
-        """
-        Listen to an event from the parent cluster.
-        :param event: The event to listen to.
-        :param callback: The callback to call when the event is emitted.
-        :param args: The args to pass to the callback.
-        :param limit: The number of times to call the callback. -1 for infinite.
-        :param pass_object: Whether to pass the object owner to the callback. Has to be True when using the decorator.
-        :param priority: The priority of the callback. Higher priority callbacks are called earlier.
-        :param kwargs: The kwargs to pass to the callback.
-        :return: nothing
-        """
-
-        with self.action_lock as lock:
-            storage = self.listener_storage
-            if event not in storage:
-                storage[event] = {}
-            lock.setitem(storage[event], self, (callback, limit, args, kwargs, pass_object, priority))
+            if getattr(self, name) is None:
+                setattr(self, name, {})
+            return getattr(self, name)
+        return parent.__get_storage(name)
 
     @staticmethod
-    def run_method(
+    def __run_method(
         storage: Optional[CallbackDict], obj: "MessageObject", quad: CallbackDefinition, *args, **kwargs
     ) -> tuple[any, int]:
         callback, limit, cargs, ckwargs, pass_obj, priority = quad
@@ -233,119 +199,28 @@ class MessageObject:
             storage[obj] = callback, limit - 1, cargs, ckwargs, pass_obj, priority
         return value, limit - 1
 
-    def emit(self, event: int | str, *args, **kwargs) -> None:
-        """
-        Emit an event to the parent cluster.
-        :param event: The event to emit.
-        :param args: The args to pass to the callback.
-        :param kwargs: The kwargs to pass to the callback.
-        :return: nothing
-        """
+    def __setup_listener(
+        self,
+        storage: dict[str, CallbackDict],
+        event: int | str,
+        callback: callable,
+        *args,
+        limit: int = 0,
+        pass_object: bool = False,
+        priority: int = 0,
+        **kwargs
+    ) -> None:
+        with self.action_lock as lock:
+            if event not in storage:
+                storage[event] = {}
+            lock.setitem(storage[event], self, (callback, limit, args, kwargs, pass_object, priority))
 
-        with self.action_lock:
-            storage = self.listener_storage
+    def __ignore_listener(self, storage: dict[str, CallbackDict], event: int | str) -> None:
+        with self.action_lock as lock:
             if event not in storage:
                 return
 
-            for obj, quad in sorted(storage[event].items(), key=lambda x: x[1][5], reverse=True):
-                new_limit = self.run_method(storage[event], obj, quad, *args, **kwargs)[1]
-                if new_limit == 0:
-                    obj.ignore(event)
-
-    def ignore(self, event: int | str) -> None:
-        """
-        Ignore an event from the parent cluster.
-        :param event: The event to ignore.
-        :return: nothing
-        """
-
-        with self.action_lock as lock:
-            storage = self.listener_storage
-            if event not in storage or self not in storage[event]:
-                return
-
             lock.delitem(storage[event], self)
-
-    # Managing calculations
-    @property
-    def math_storage(self) -> dict[str, CallbackDict]:
-        """
-        Gets the listener storage for the parent cluster.
-        :return: The listener storage.
-        """
-
-        parent = self.parent_cluster
-        if parent is self:
-            if self._mt_storage is None:
-                self._mt_storage = {}
-            return self._mt_storage
-        return parent.math_storage
-
-    def register_math(
-        self,
-        target: int | str,
-        callback: callable,
-        *args,
-        limit: int = -1,
-        pass_object: bool = False,
-        priority: float = 0,
-        **kwargs
-    ):
-        """
-        Listen to a math recalculation target from the parent cluster.
-        :param target: The target to listen to.
-        :param callback: The callback to call when the event is emitted.
-        :param args: The args to pass to the callback.
-        :param limit: The number of times to call the callback. -1 for infinite.
-        :param pass_object: Whether to pass the object owner to the callback. Has to be True when using the decorator.
-        :param priority: The priority of the callback. Higher priority callbacks are called later.
-        :param kwargs: The kwargs to pass to the callback.
-        :return: nothing
-        """
-
-        with self.action_lock as lock:
-            storage = self.math_storage
-            if target not in storage:
-                storage[target] = {}
-            lock.setitem(storage[target], self, (callback, limit, args, kwargs, pass_object, priority))
-
-    def calculate(self, target: int | str, init_value: V, **kwargs) -> V:
-        """
-        Emit an event to the parent cluster.
-        :param target: The event to emit.
-        :param init_value: The initial value without any calculation changes.
-        :param kwargs: The kwargs to create the calculation context.
-        :return: the resultant value
-        """
-
-        current_value = init_value
-        with self.action_lock:
-            storage = self.math_storage
-            if target not in storage:
-                return current_value
-
-            for obj, quad in sorted(storage[target].items(), key=lambda x: x[1][5]):
-                current_value, new_limit = self.run_method(
-                    storage[target], obj, quad, current_value, init_value=init_value, **kwargs
-                )
-                if new_limit == 0:
-                    obj.ignore_math(target)
-
-        return current_value
-
-    def ignore_math(self, target: int | str):
-        """
-        Ignore a math target from the parent cluster.
-        :param target: The target to ignore.
-        :return: nothing
-        """
-
-        with self.action_lock as lock:
-            storage = self.math_storage
-            if target not in storage or self not in storage[target]:
-                return
-
-            lock.delitem(storage[target], self)
 
     # Bulk Cleanup methods
     def ignore_all(self):
@@ -370,40 +245,118 @@ class MessageObject:
             child.cleanup()
         self.children = {}
 
-    # Replacement methods
+    # Event storages
+    @property
+    def listener_storage(self) -> dict[str, CallbackDict]:
+        """
+        Gets the storage used for listener events.
+        """
+
+        return self.__get_storage("_ls_storage")
+
+    @property
+    def math_storage(self) -> dict[str, CallbackDict]:
+        """
+        Gets the storage used for mathematical recalculations.
+        """
+
+        return self.__get_storage("_mt_storage")
+
     @property
     def repl_storage(self) -> dict[str, CallbackDict]:
         """
-        Gets the listener storage for the parent cluster.
-        :return: The listener storage.
+        Gets the storage used for method replacements.
         """
 
-        parent = self.parent_cluster
-        if parent is self:
-            if self._rm_storage is None:
-                self._rm_storage = {}
-            return self._rm_storage
-        return parent.repl_storage
+        return self.__get_storage("_rm_storage")
 
-    def ignore_replacement(self, target: int | str):
+    # Event listeners
+    def listen_to(self, *args, **kwargs) -> None:
         """
-        Ignore a replacement target from the parent cluster.
-        :param target: The target to ignore.
+        Listen to an event on this object.
+        """
+        self.__setup_listener(self.listener_storage, *args, **kwargs)
+
+    def register_math(self, *args, **kwargs) -> None:
+        """
+        Register a mathematical recalculation on this object.
+        """
+        self.__setup_listener(self.math_storage, *args, **kwargs)
+
+    def register_replace(self, *args, **kwargs) -> None:
+        """
+        Register a method replacement on this object.
+        """
+        self.__setup_listener(self.repl_storage, *args, **kwargs)
+
+    # Event ignores
+    def ignore(self, *args, **kwargs) -> None:
+        """
+        Ignore an event on this object.
+        """
+        self.__ignore_listener(self.listener_storage, *args, **kwargs)
+
+    def ignore_math(self, *args, **kwargs) -> None:
+        """
+        Ignore a mathematical recalculation on this object.
+        """
+        self.__ignore_listener(self.math_storage, *args, **kwargs)
+
+    def ignore_replacement(self, *args, **kwargs) -> None:
+        """
+        Ignore a method replacement on this object.
+        """
+        self.__ignore_listener(self.repl_storage, *args, **kwargs)
+
+    # Event emitters
+    def emit(self, event: int | str, *args, **kwargs) -> None:
+        """
+        Emit an event to the parent cluster.
+        :param event: The event to emit.
+        :param args: The args to pass to the callback.
+        :param kwargs: The kwargs to pass to the callback.
         :return: nothing
         """
 
-        with self.action_lock as lock:
-            storage = self.repl_storage
-            if target not in storage or self not in storage[target]:
+        with self.action_lock:
+            storage = self.listener_storage
+            if event not in storage:
                 return
 
-            lock.delitem(storage[target], self)
+            for obj, quad in sorted(storage[event].items(), key=lambda x: x[1][5], reverse=True):
+                new_limit = self.__run_method(storage[event], obj, quad, *args, **kwargs)[1]
+                if new_limit == 0:
+                    obj.ignore(event)
+
+    def calculate(self, target: int | str, init_value: V, **kwargs) -> V:
+        """
+        Emit an event to the parent cluster.
+        :param target: The event to emit.
+        :param init_value: The initial value without any calculation changes.
+        :param kwargs: The kwargs to create the calculation context.
+        :return: the resultant value
+        """
+
+        current_value = init_value
+        with self.action_lock:
+            storage = self.math_storage
+            if target not in storage:
+                return current_value
+
+            for obj, quad in sorted(storage[target].items(), key=lambda x: x[1][5]):
+                current_value, new_limit = self.__run_method(
+                    storage[target], obj, quad, current_value, init_value=init_value, **kwargs
+                )
+                if new_limit == 0:
+                    obj.ignore_math(target)
+
+        return current_value
 
     def run_replace(self, name: int | str, *args, **kwargs):
         methods = self.repl_storage.get(name, {})
         with self.action_lock:
             for obj, cb in sorted(methods.items(), key=lambda x: x[1][5], reverse=True):
-                value, limit = self.run_method(None, obj, cb, *args, **kwargs)
+                value, limit = self.__run_method(None, obj, cb, *args, **kwargs)
                 if value is FizzleReplace:
                     continue
 
@@ -413,31 +366,3 @@ class MessageObject:
                 return True, value
 
         return False, None
-
-    def register_replace(
-        self,
-        funcname: int | str,
-        callback: callable,
-        *args,
-        limit: int = -1,
-        pass_object: bool = False,
-        priority: float = 0,
-        **kwargs
-    ):
-        """
-        Listen to a replacement target from the parent cluster.
-        :param funcname: The target to listen to.
-        :param callback: The callback to call when the event is emitted.
-        :param args: The args to pass to the callback.
-        :param limit: The number of times to call the callback. -1 for infinite.
-        :param pass_object: Whether to pass the object owner to the callback. Has to be True when using the decorator.
-        :param priority: The priority of the callback. Higher priority callbacks are called later.
-        :param kwargs: The kwargs to pass to the callback.
-        :return: nothing
-        """
-
-        with self.action_lock as lock:
-            storage = self.repl_storage
-            if funcname not in storage:
-                storage[funcname] = {}
-            lock.setitem(storage[funcname], self, (callback, limit, args, kwargs, pass_object, priority))
