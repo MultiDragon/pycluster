@@ -52,7 +52,8 @@ def test_calculation():
     registry.create_and_insert(1, tree, "child3", cast_to=CalculationObject)
     assert tree.calculate("use_init_value", 20) == 8000
 
-    with registry.temporary_object(2, tree, cast_to=TempObject):
+    with registry.temporary_object(2, tree, cast_to=TempObject) as obj:
+        assert isinstance(obj, TempObject)
         assert len(tree.children) == 4
         assert tree.calculate("magic", 10) == 20
 
