@@ -24,6 +24,13 @@ class CalculationObject(MessageObject):
         return value * multiplier
 
 
+@registry.register(2)
+class TempObject(MessageObject):
+    @math("magic")
+    def change_magic(self, value: int, **kwargs) -> int:
+        return value * 2
+
+
 def construct_tree():
     cluster = MessageCluster(registry)
     child1 = registry.create_and_insert(1, cluster, "child", cast_to=CalculationObject)
@@ -40,6 +47,17 @@ def test_calculation():
     assert tree.calculate("damage", 1) == 1
     child1.cleanup()
     assert tree.calculate("use_init_value", 20) == 20
+
+    registry.create_and_insert(1, tree, "child2", cast_to=CalculationObject)
+    registry.create_and_insert(1, tree, "child3", cast_to=CalculationObject)
+    assert tree.calculate("use_init_value", 20) == 8000
+
+    with registry.temporary_object(2, tree, cast_to=TempObject):
+        assert len(tree.children) == 4
+        assert tree.calculate("magic", 10) == 20
+
+    assert len(tree.children) == 3
+    assert tree.calculate("magic", 10) == 10
 
 
 if __name__ == "__main__":

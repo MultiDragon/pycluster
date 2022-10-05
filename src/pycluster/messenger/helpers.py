@@ -121,3 +121,23 @@ def post_init(*args, **kwargs):
             setattr(owner, name, self.callback)
 
     return PostInit
+
+
+def replaceable(name: int | str):
+    """
+    Decorator for replaceable methods.
+    :param name: the name of the method to replace
+    :return: the decorated method
+    """
+
+    def decorator(method: callable):
+        def decorated(obj, *args, **kwargs):
+            ans, value = obj.run_replace(name, *args, **kwargs)
+            if ans:
+                return value
+            else:
+                return method(obj, *args, **kwargs)
+
+        return decorated
+
+    return decorator

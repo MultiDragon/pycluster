@@ -39,8 +39,17 @@ class MessageObject:
         self.children = {}
         self.parent = parent
 
-    def __getitem__(self, item: str) -> "MessageObject":
-        return self.children[item]
+    def __getitem__(self, item) -> "MessageObject":
+        return self.children[str(item)]
+
+    def get(self, item) -> Optional["MessageObject"]:
+        return self.children.get(str(item))
+
+    def __iter__(self):
+        return iter(self.children.items())
+
+    def __contains__(self, item):
+        return str(item) in self.children
 
     # Managing parent interaction
     @property

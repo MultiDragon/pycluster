@@ -1,5 +1,5 @@
 from pycluster.messenger.cluster import MessageCluster
-from pycluster.messenger.helpers import listen, math, replace
+from pycluster.messenger.helpers import listen, math, replace, replaceable
 from pycluster.messenger.message_object import MessageObject
 from pycluster.messenger.object_registry import ObjectRegistry
 
@@ -47,7 +47,7 @@ class ObjectB(MessageObject):
 
 @registry.register(3)
 class ObjectC(MessageObject):
-    @registry.replaceable("test_method")
+    @replaceable("test_method")
     def test_method(self):
         return 10
 

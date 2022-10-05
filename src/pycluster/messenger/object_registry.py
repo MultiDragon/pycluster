@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from typing import Type, TypeVar
 
@@ -8,6 +9,7 @@ T = TypeVar("T", bound=MessageObject)
 
 class ObjectRegistry:
     logger = logging.getLogger("pycluster.messenger.ObjectRegistry")
+    TemporaryObjectNum = 0
 
     def __init__(self, name: str, ctype: Type[MessageObject] = None, forgiving: bool = False):
         self.name = name
@@ -52,15 +54,15 @@ class ObjectRegistry:
         obj.unwrap(wrapped)
         return obj
 
-    def replaceable(self, name: int | str):
-        def decorator(method: callable):
-            def decorated(obj, *args, **kwargs):
-                ans, value = obj.run_replace(name, *args, **kwargs)
-                if ans:
-                    return value
-                else:
-                    return method(obj, *args, **kwargs)
+    @contextlib.contextmanager
+    def temporary_object(
+        self, object_type: int, parent: MessageObject, cast_to: Type[T] = MessageObject, **kwargs
+    ) -> T:
+        self.TemporaryObjectNum += 1
+        object_id = f"_tempObject_{self.TemporaryObjectNum}"
 
-            return decorated
-
-        return decorator
+        try:
+            obj = self.create_and_insert(object_type, parent, object_id, cast_to, **kwargs)
+            yield obj
+        finally:
+            parent.remove_child(object_id)

@@ -1,5 +1,5 @@
 from pycluster.messenger.cluster import MessageCluster
-from pycluster.messenger.helpers import replace
+from pycluster.messenger.helpers import replace, replaceable
 from pycluster.messenger.message_object import FizzleReplace, MessageObject
 from pycluster.messenger.object_registry import ObjectRegistry
 
@@ -8,7 +8,7 @@ registry = ObjectRegistry("fizzle", MessageCluster)
 
 @registry.register(1)
 class ReplaceTarget(MessageObject):
-    @registry.replaceable("test")
+    @replaceable("test")
     def test(self, value):
         return 1 + value
 
