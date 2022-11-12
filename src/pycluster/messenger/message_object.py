@@ -156,7 +156,7 @@ class MessageObject:
             if child_id in parent.children:
                 child = parent.children[child_id]
             else:
-                child = self.parent_cluster.registry.create_object(child_type, parent)
+                child = parent.registry.create_object(child_type, parent)
                 parent.add_child(child_id, child)
             child.datagram = data
             for child_id, (child_type, data, children) in children.items():
